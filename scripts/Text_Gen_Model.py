@@ -4,14 +4,13 @@ import numpy as np
 import os
 import time
 
+@tf.keras.saving.register_keras_serializable()
 class TextGenModel(tf.keras.Model):
     def __init__(self, text, embedding_dim=256, rnn_units=1024):
-        super().__init__()
-
+        super(TextGenModel, self).__init__()
+        self.ids_from_chars = tf.keras.layers.StringLookup(vocabulary=list(set(text))) # Convert characters into ids.
+        self.chars_from_ids = tf.keras.layers.StringLookup(vocabulary=list(self.ids_from_chars.get_vocabulary()), invert=True) # Convert ids into characters.
         self.vocab = set(text)
-
-        self.ids_from_chars = tf.keras.layers.StringLookup(vocabulary=list(self.vocab)) # Convert characters into ids.
-        self.chars_from_ids = tf.keras.layers.StringLookup(vocabulary=list(self.vocab), invert=True) # Convert ids into characters.
 
         self.vocab_size = len(self.ids_from_chars.get_vocabulary())
 
@@ -21,11 +20,24 @@ class TextGenModel(tf.keras.Model):
                                    return_state=True) # Learn patterns using gated mechanisms (determines what is remembered and what will be used to update GRU parameters).
         self.dense = tf.keras.layers.Dense(self.vocab_size) # Output layer
 
-    def texts_from_ids(self, predicted_logits):
-        ids = tf.random.categorical(predicted_logits, num_samples=1) # Samples from logit distribution predicted by model.
-        ids = tf.squeeze(ids, axis=-1) # Removes dimensions of size 1 (i.e. remove unnecessary dimension when it only has 1 element).
-        return tf.strings.reduce_join(self.chars_from_ids(ids), axis = -1) # Characters are concatenated via their rows.
+    def get_texts(self, results):
+        return tf.strings.reduce_join(results).numpy().decode("utf-8") # Characters are concatenated via their rows.
     
+    def generate_text(self, text, number_of_characters = 1000):
+        next_char = tf.constant([text])
+        states = None
+        results = [next_char]
+
+        for i in range(number_of_characters):
+            next_char = tf.strings.unicode_split(next_char, "UTF-8")
+            next_char = self.ids_from_chars(next_char).to_tensor()
+            predicted_logits, states = self(next_char, states, return_states=True)
+            ids = tf.random.categorical(predicted_logits[:, -1, :], num_samples=1) # Samples from logit distribution predicted by model.
+            ids = tf.squeeze(ids, axis=-1) # Removes dimensions of size 1 (i.e. remove unnecessary dimension when it only has 1 element).
+            next_char = self.chars_from_ids(ids)
+            results.append(next_char)
+        return self.get_texts(results)
+
     def split_data(self, input):
         return input[:-1], input[1:] # Returns input data and target label, respectively.
     
@@ -62,10 +74,18 @@ class TextGenModel(tf.keras.Model):
         inputs, labels = inputs
 
         with tf.GradientTape() as tape:
-            predictions = self.call(inputs, training=True) # Have our model predict and training set to true.
+            predictions = self(inputs, training=True) # Have our model predict and training set to true.
             loss = self.loss(labels, predictions) # Calculate loss
             grads = tape.gradient(loss, self.trainable_variables) # Calculate gradients based on loss and trainable variables.
             self.optimizer.apply_gradients(zip(grads, self.trainable_variables)) # Updated gradients with respects to trainable variables.
-        
-            return {"loss":loss}
+
+            for metric in self.metrics: # Iterates through all metrics.
+                if metric.name == "loss": # If the current metric is "loss", just update the metric with the loss.
+                    metric.update_state(loss)
+                else: # Else update it with the label and predictions.
+                    metric.update_state(labels, predictions)
+            
+            monitored_metrics = {metric.name: metric.result() for metric in self.metrics}
+            monitored_metrics["loss"] = loss
+            return monitored_metrics
 
