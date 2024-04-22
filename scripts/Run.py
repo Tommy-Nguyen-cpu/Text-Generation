@@ -32,7 +32,7 @@ def main(args):
 
         generator = Generator(model, model.chars_from_ids, model.ids_from_chars, args.randomness)
 
-        print("Testing Generator...\n", "--"*80, generate_text(generator,"ROMEO:")) # We need to run our generator at least once so it can be built.
+        print("Testing Generator...\n", "--"*80, generate_text(generator,args.starter_text)) # We need to run our generator at least once so it can be built.
         tf.saved_model.save(generator, args.model_save_path)
     else:
         model = tf.saved_model.load(args.model_load_path)
