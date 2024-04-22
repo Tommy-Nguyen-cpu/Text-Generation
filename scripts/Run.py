@@ -15,7 +15,7 @@ def generate_text(generator, text, number_of_characters = 1000):
     return tf.strings.reduce_join(results).numpy().decode("UTF-8")
 
 def main(args):
-    if args.randomness <= 0 or args.randomness < 1:
+    if args.randomness <= 0 or args.randomness > 1:
         print("RANDOMNESS MUST BE GREATER THAN 0 and LESS THAN OR EQUAL TO 1. DEFAULTING TO .1 SINCE INPUT WAS OUTSIDE THAT RANGE.")
         args.randomness = 0.1
     if args.train:
