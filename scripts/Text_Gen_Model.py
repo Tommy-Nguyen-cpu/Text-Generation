@@ -20,24 +20,6 @@ class TextGenModel(tf.keras.Model):
                                    return_state=True) # Learn patterns using gated mechanisms (determines what is remembered and what will be used to update GRU parameters).
         self.dense = tf.keras.layers.Dense(self.vocab_size) # Output layer
 
-    def get_texts(self, results):
-        return tf.strings.reduce_join(results).numpy().decode("utf-8") # Characters are concatenated via their rows.
-    
-    def generate_text(self, text, number_of_characters = 1000):
-        next_char = tf.constant([text])
-        states = None
-        results = [next_char]
-
-        for i in range(number_of_characters):
-            next_char = tf.strings.unicode_split(next_char, "UTF-8")
-            next_char = self.ids_from_chars(next_char).to_tensor()
-            predicted_logits, states = self(next_char, states, return_states=True)
-            ids = tf.random.categorical(predicted_logits[:, -1, :], num_samples=1) # Samples from logit distribution predicted by model.
-            ids = tf.squeeze(ids, axis=-1) # Removes dimensions of size 1 (i.e. remove unnecessary dimension when it only has 1 element).
-            next_char = self.chars_from_ids(ids)
-            results.append(next_char)
-        return self.get_texts(results)
-
     def split_data(self, input):
         return input[:-1], input[1:] # Returns input data and target label, respectively.
     
