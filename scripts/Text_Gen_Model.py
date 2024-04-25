@@ -1,9 +1,5 @@
 import tensorflow as tf
 
-import numpy as np
-import os
-import time
-
 @tf.keras.saving.register_keras_serializable()
 class TextGenModel(tf.keras.Model):
     def __init__(self, text, embedding_dim=256, rnn_units=1024):
